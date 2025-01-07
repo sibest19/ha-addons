@@ -13,7 +13,7 @@ on:
 jobs:
   find:
     name: Find add-ons
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       addons: ${{ steps.addons.outputs.addons_list }}
     steps:
@@ -26,7 +26,7 @@ jobs:
 
   lint:
     name: Lint add-on ${{ matrix.path }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: find
     strategy:
       matrix:
