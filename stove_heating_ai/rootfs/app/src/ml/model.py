@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 import joblib
 from pydantic import BaseModel, Field
 import keras
+from threading import Lock
 
 from constants import (
     model_save_path,
@@ -29,6 +30,9 @@ FEATURE_COLUMNS = [
 
 _model = None
 _scaler = None
+
+# Create a global lock
+_model_load_lock = Lock()
 
 
 def create_model(input_shape: int) -> keras.Sequential:
@@ -97,7 +101,7 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
         )
 
         # Evaluate model on validation set
-        val_loss = model.evaluate(X_val, y_val, verbose=0)[0] # type: ignore
+        val_loss = model.evaluate(X_val, y_val, verbose=0)[0]  # type: ignore
         logger.info(f"Fold {fold + 1}: MSE = {val_loss:.4f}")
 
         # Keep track of best model
@@ -111,7 +115,7 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
 
     model = best_model
 
-    mse, mae = model.evaluate(X_val, y_val, verbose=0) # type: ignore
+    mse, mae = model.evaluate(X_val, y_val, verbose=0)  # type: ignore
     logger.info("Model evaluation on test set - MAE: %.4f, MSE: %.4f", mae, mse)
 
     # Save both model and scaler
@@ -148,9 +152,10 @@ def predict(input_params: PredictInput) -> float:
     global _model, _scaler
 
     try:
-        if _model is None or _scaler is None:
-            _model = keras.models.load_model(model_save_path)
-            _scaler = joblib.load(scaler_save_path)
+        with _model_load_lock:
+            if _model is None or _scaler is None:
+                _model = keras.models.load_model(model_save_path)
+                _scaler = joblib.load(scaler_save_path)
 
         if not isinstance(_model, keras.Sequential):
             logger.error("Invalid model")
