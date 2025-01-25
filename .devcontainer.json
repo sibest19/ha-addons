@@ -10,7 +10,8 @@
     "vscode": {
       "extensions": [
         "timonwong.shellcheck",
-        "esbenp.prettier-vscode"
+        "esbenp.prettier-vscode",
+        "GitHub.copilot"
       ],
       "settings": {
         "editor.formatOnPaste": false,
@@ -27,6 +28,13 @@
     }
   },
   "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "dockerDashComposeVersion": "none",
+      "installDockerBuildx": true,
+      "installDockerComposeSwitch": true,
+      "moby": true,
+      "version": "latest"
+    },
     "ghcr.io/devcontainers/features/github-cli:1": {
       "installDirectlyFromGitHubRelease": true,
       "version": "latest"

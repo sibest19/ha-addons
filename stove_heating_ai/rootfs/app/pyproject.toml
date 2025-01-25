@@ -1,0 +1,21 @@
+[project]
+name = "stove_heating_ai"
+version = "0.1.0"
+description = "AI model for predicting and optimizing stove heating behavior"
+dependencies = [
+    "fastapi>=0.110.0",
+    "influxdb-client>=1.48.0",
+    "numpy<2.1.0",
+    "pandas>=2.2.3",
+    "pydantic>=2.6.3",
+    "scikit-learn>=1.6.0",
+    "tensorflow>=2.18.0",
+    "uvicorn>=0.27.1",
+    "requests>=2.32.3",
+]
+requires-python = ">= 3.8"
+
+[tool.rye]
+managed = true
+virtual = true
+dev-dependencies = []

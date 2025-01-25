@@ -1,0 +1,12 @@
+#!/usr/bin/with-contenv bashio
+
+# ==============================================================================
+# Start the stove_heating_ai service
+# s6-overlay docs: https://github.com/just-containers/s6-overlay
+# ==============================================================================
+
+bashio::log.info "Starting ai_server service"
+
+cd /app/src
+
+exec python main.py

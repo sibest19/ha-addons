@@ -1,0 +1,13 @@
+configuration:
+  influxdb_host:
+    name: InfluxDB Host
+    description: The host of the InfluxDB instance.
+  influxdb_port:
+    name: InfluxDB Port
+    description: The port of the InfluxDB instance.
+  influxdb_user:
+    name: InfluxDB User
+    description: The user of the InfluxDB instance.
+  influxdb_password:
+    name: InfluxDB Password
+    description: The password of the InfluxDB instance.
