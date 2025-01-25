@@ -39,7 +39,7 @@ _model_lock = Lock()
 def create_model(input_shape: int) -> keras.Sequential:
     """Create and return the neural network model."""
     # Ensure we're using the CPU strategy
-    with tf.device('/CPU:0'):
+    with tf.device("/CPU:0"):
         return keras.Sequential(
             [
                 keras.layers.InputLayer(shape=(input_shape,)),
@@ -180,7 +180,7 @@ def predict(input_params: PredictInput) -> float:
         with _model_lock:
             if _model is None or _scaler is None:
                 # Ensure model loading happens on CPU
-                with tf.device('/CPU:0'):
+                with tf.device("/CPU:0"):
                     _model = keras.models.load_model(model_save_path)
                     _scaler = joblib.load(scaler_save_path)
 

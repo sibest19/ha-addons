@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -57,33 +57,51 @@ class PredictionResponse(BaseModel):
 def init_worker():
     """Initialize TensorFlow configuration for worker processes."""
     import tensorflow as tf
-    tf.config.set_visible_devices([], 'GPU')  # Disable GPU
-    physical_devices = tf.config.list_physical_devices('CPU')
+
+    tf.config.set_visible_devices([], "GPU")  # Disable GPU
+    physical_devices = tf.config.list_physical_devices("CPU")
     if physical_devices:
-        tf.config.set_visible_devices(physical_devices, 'CPU')
+        tf.config.set_visible_devices(physical_devices, "CPU")
         tf.config.threading.set_intra_op_parallelism_threads(1)
         tf.config.threading.set_inter_op_parallelism_threads(1)
 
+
 # Update the process pool creation
 def create_process_pool():
-    return ProcessPoolExecutor(
-        max_workers=1,  # Limit to single worker for TensorFlow stability
-        initializer=init_worker
-    )
+    try:
+        return ProcessPoolExecutor(
+            max_workers=1,  # Limit to single worker for TensorFlow stability
+            initializer=init_worker,
+        )
+    except Exception as e:
+        logger.error("Failed to create process pool: %s", str(e))
+        # Fallback to synchronous execution
+        init_worker()
+        return None
+
 
 # Replace the global process_pool with:
 process_pool = create_process_pool()
 
+
 @router.on_event("shutdown")
 async def shutdown_event():
     """Ensure proper cleanup of process pool on shutdown."""
-    process_pool.shutdown(wait=True)
+    try:
+        if process_pool:
+            process_pool.shutdown(wait=True)
+    except Exception as e:
+        logger.error("Error during process pool shutdown: %s", str(e))
 
 
 @router.get("/")
 async def root(request: Request):
     """Serve the main HTML interface."""
-    response = FileResponse(os.path.join(static_dir, "index.html"))
+    html_path = os.path.join(static_dir, "index.html")
+    if not os.path.exists(html_path):
+        logger.error("HTML file not found at %s", html_path)
+        raise HTTPException(status_code=500, detail="Interface file not found")
+    response = FileResponse(html_path)
     return response
 
 
@@ -142,12 +160,7 @@ async def start_training(background_tasks: BackgroundTasks) -> TrainingResponse:
                 loop = asyncio.get_event_loop()
                 # Increase timeout to 1 hour for larger datasets
                 await asyncio.wait_for(
-                    loop.run_in_executor(
-                        process_pool,
-                        train_model,
-                        df
-                    ),
-                    timeout=3600
+                    loop.run_in_executor(process_pool, train_model, df), timeout=3600
                 )
 
         except asyncio.TimeoutError:
