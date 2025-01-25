@@ -52,7 +52,7 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
 
     feature_columns = FEATURE_COLUMNS
 
-    missing_columns = [col for col in feature_columns if col not in df.columns]
+    missing_columns = set(FEATURE_COLUMNS) - set(df.columns)
     if missing_columns:
         logger.error("Missing required columns: %s", missing_columns)
         return None, None
@@ -60,15 +60,19 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
     X = df[feature_columns]
     y = df["Y"]
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=4765
-    )
+    from sklearn.model_selection import KFold
+    kfold = KFold(n_splits=5, shuffle=True, random_state=4765)
+    cv_scores = []
 
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    X_scaled = scaler.fit_transform(X)
 
-    model = create_model(X_train_scaled.shape[1])
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(X_scaled)):
+        X_train, X_val = X_scaled[train_idx], X_scaled[val_idx]
+        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
+
+        model = create_model(X_scaled.shape[1])
+
     model.compile(optimizer="adam", loss="mse", metrics=["mae"])
 
     callbacks = [
@@ -81,7 +85,7 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
     ]
 
     history = model.fit(
-        X_train_scaled,
+        X_train,
         y_train,
         validation_split=0.2,
         epochs=100,
@@ -90,7 +94,7 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
         verbose="auto",
     )
 
-    mse, mae = model.evaluate(X_test_scaled, y_test, verbose="auto")
+    mse, mae = model.evaluate(X_val, y_val, verbose="auto")
     logger.info("Model evaluation on test set - MAE: %.4f, MSE: %.4f", mae, mse)
 
     # Save both model and scaler
