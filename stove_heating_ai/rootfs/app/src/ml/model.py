@@ -61,8 +61,11 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
     y = df["Y"]
 
     from sklearn.model_selection import KFold
+
     kfold = KFold(n_splits=5, shuffle=True, random_state=4765)
-    cv_scores = []
+
+    best_model = None
+    best_score = float("inf")
 
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -72,29 +75,43 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
         y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
         model = create_model(X_scaled.shape[1])
+        model.compile(optimizer="adam", loss="mse", metrics=["mae"])
 
-    model.compile(optimizer="adam", loss="mse", metrics=["mae"])
+        callbacks = [
+            keras.callbacks.EarlyStopping(
+                monitor="val_loss", patience=10, restore_best_weights=True
+            ),
+            keras.callbacks.ReduceLROnPlateau(
+                monitor="val_loss", factor=0.5, patience=5, min_lr=0.0001
+            ),
+        ]
 
-    callbacks = [
-        keras.callbacks.EarlyStopping(
-            monitor="val_loss", patience=10, restore_best_weights=True
-        ),
-        keras.callbacks.ReduceLROnPlateau(
-            monitor="val_loss", factor=0.5, patience=5, min_lr=0.0001
-        ),
-    ]
+        history = model.fit(
+            X_train,
+            y_train,
+            validation_data=(X_val, y_val),
+            epochs=100,
+            batch_size=32,
+            callbacks=callbacks,
+            verbose="auto",
+        )
 
-    history = model.fit(
-        X_train,
-        y_train,
-        validation_split=0.2,
-        epochs=100,
-        batch_size=32,
-        callbacks=callbacks,
-        verbose="auto",
-    )
+        # Evaluate model on validation set
+        val_loss = model.evaluate(X_val, y_val, verbose=0)[0] # type: ignore
+        logger.info(f"Fold {fold + 1}: MSE = {val_loss:.4f}")
 
-    mse, mae = model.evaluate(X_val, y_val, verbose="auto")
+        # Keep track of best model
+        if val_loss < best_score:
+            best_score = val_loss
+            best_model = model
+
+    if best_model is None:
+        logger.error("Model training failed")
+        return None, None
+
+    model = best_model
+
+    mse, mae = model.evaluate(X_val, y_val, verbose=0) # type: ignore
     logger.info("Model evaluation on test set - MAE: %.4f, MSE: %.4f", mae, mse)
 
     # Save both model and scaler
