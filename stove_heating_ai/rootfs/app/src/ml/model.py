@@ -1,10 +1,9 @@
 from typing import Optional, Tuple, Any, List
 import logging
-import tensorflow as tf
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-import numpy as np
+import joblib
 import keras
 
 from constants import (
@@ -15,6 +14,20 @@ from constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+FEATURE_COLUMNS = [
+    FluxQueryKeys.SETPOINT_TEMPERATURE.value,
+    FluxQueryKeys.AVG_TEMPERATURE.value,
+    FluxQueryKeys.LIVING_ROOM_HUMIDITY.value,
+    FluxQueryKeys.LIVING_ROOM_TEMPERATURE.value,
+    FluxQueryKeys.OUTDOOR_TEMPERATURE.value,
+    FluxQueryKeys.STOVE_SET_POWER.value,
+    FluxQueryKeys.STOVE_ACTUAL_POWER.value,
+    time_since_on_key,
+]
+
+_model = None
+_scaler = None
 
 
 def create_model(input_shape: int) -> keras.Sequential:
@@ -36,16 +49,7 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
         logger.warning("No data available for training")
         return None, None
 
-    feature_columns = [
-        FluxQueryKeys.SETPOINT_TEMPERATURE.value,
-        FluxQueryKeys.AVG_TEMPERATURE.value,
-        FluxQueryKeys.LIVING_ROOM_HUMIDITY.value,
-        FluxQueryKeys.LIVING_ROOM_TEMPERATURE.value,
-        FluxQueryKeys.OUTDOOR_TEMPERATURE.value,
-        FluxQueryKeys.STOVE_SET_POWER.value,
-        FluxQueryKeys.STOVE_ACTUAL_POWER.value,
-        time_since_on_key,
-    ]
+    feature_columns = FEATURE_COLUMNS
 
     X = df[feature_columns]
     y = df["Y"]
@@ -85,10 +89,8 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
 
     # Save both model and scaler
     model.save(model_save_path)
-    import pickle
+    joblib.dump(scaler, scaler_save_path)
 
-    with open(scaler_save_path, "wb") as f:
-        pickle.dump(scaler, f)
     logger.info("Model saved to %s and scaler to %s", model_save_path, scaler_save_path)
 
     return model, history
@@ -127,20 +129,18 @@ def predict(input_params: PredictInput) -> float:
     Returns:
         Predicted time to reach comfort temperature in minutes
     """
-    try:
-        model = keras.models.load_model(model_save_path)
+    global _model, _scaler
 
-        if not isinstance(model, keras.Sequential):
+    try:
+        if _model is None or _scaler is None:
+            _model = keras.models.load_model(model_save_path)
+            _scaler = joblib.load(scaler_save_path)
+
+        if not isinstance(_model, keras.Sequential):
             logger.error("Invalid model")
             raise ValueError("Invalid model type")
 
-        # Load the saved scaler
-        import pickle
-
-        with open(scaler_save_path, "rb") as f:
-            scaler = pickle.load(f)
-
-        if not isinstance(scaler, StandardScaler):
+        if not isinstance(_scaler, StandardScaler):
             logger.error("Invalid scaler")
             raise ValueError("Invalid scaler type")
 
@@ -158,23 +158,14 @@ def predict(input_params: PredictInput) -> float:
                     input_params.time_since_on,
                 ]
             ],
-            columns=[
-                FluxQueryKeys.SETPOINT_TEMPERATURE.value,
-                FluxQueryKeys.AVG_TEMPERATURE.value,
-                FluxQueryKeys.LIVING_ROOM_HUMIDITY.value,
-                FluxQueryKeys.LIVING_ROOM_TEMPERATURE.value,
-                FluxQueryKeys.OUTDOOR_TEMPERATURE.value,
-                FluxQueryKeys.STOVE_SET_POWER.value,
-                FluxQueryKeys.STOVE_ACTUAL_POWER.value,
-                time_since_on_key,
-            ],
+            columns=FEATURE_COLUMNS,
         )
 
         # Scale features using the saved scaler
-        features_scaled = scaler.transform(features)
+        features_scaled = _scaler.transform(features)
 
         # Make prediction
-        prediction = model.predict(features_scaled, verbose="auto")
+        prediction = _model.predict(features_scaled, verbose="auto")
         return float(prediction[0][0])
 
     except Exception as e:
