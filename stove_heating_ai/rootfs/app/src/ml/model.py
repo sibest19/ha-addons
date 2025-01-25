@@ -52,6 +52,11 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
 
     feature_columns = FEATURE_COLUMNS
 
+    missing_columns = [col for col in feature_columns if col not in df.columns]
+    if missing_columns:
+        logger.error("Missing required columns: %s", missing_columns)
+        return None, None
+
     X = df[feature_columns]
     y = df["Y"]
 
