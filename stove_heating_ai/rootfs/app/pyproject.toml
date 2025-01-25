@@ -18,4 +18,7 @@ requires-python = ">= 3.8"
 [tool.rye]
 managed = true
 virtual = true
-dev-dependencies = []
+dev-dependencies = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.2",
+]

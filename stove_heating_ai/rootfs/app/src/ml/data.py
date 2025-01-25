@@ -73,120 +73,108 @@ async def query_influx_data(configuration: AppConfig | None) -> pd.DataFrame:
 
 def extract_heating_episodes(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Extracts heating episodes from the input DataFrame.
-    Each episode starts when stove_status becomes > 0 (previously <= 0),
-    and ends when stove_status goes back to 0 or data ends.
-
-    If, during the episode, the comfort temperature is reached, a new 'Y' column is added:
-      Y = the time (minutes) remaining from the current row to the time comfort is reached.
-      If the row time is past the comfort time, Y=NaN.
-
-    Adds a 'time_since_on' column to track minutes elapsed from the start of the episode.
-    Discards episodes that never reach comfort temperature.
-
-    Args:
-        df: A pandas DataFrame containing time series data with stove status,
-            setpoint temperature, average temperature, etc.
-
-    Returns:
-        A new DataFrame containing only valid episodes (those that reach comfort).
-        If no valid episodes exist, returns an empty DataFrame.
+    Extracts heating episodes from the input DataFrame using vectorized operations.
+    Each episode starts when stove_status becomes > 0 and ends when it returns to 0.
     """
-    df = df.copy()  # do not mutate the original DataFrame
-    df.sort_index(inplace=True)
+    if df.empty:
+        return pd.DataFrame()
 
-    episodes: List[pd.DataFrame] = []
-    i = 0
-    n = len(df)
-    total_episodes_found = 0
-    episodes_reaching_comfort = 0
+    df = df.copy()
+    df.sort_index(inplace=True)
 
     stove_status_col = FluxQueryKeys.STOVE_STATUS.value
     setpoint_temp_col = FluxQueryKeys.SETPOINT_TEMPERATURE.value
     avg_temp_col = FluxQueryKeys.AVG_TEMPERATURE.value
+
+    # Verify required columns exist
+    required_cols = [stove_status_col, setpoint_temp_col, avg_temp_col]
+    if not all(col in df.columns for col in required_cols):
+        logger.error("Missing required columns")
+        return pd.DataFrame()
 
     logger.debug("Starting episode extraction with columns:")
     logger.debug("- Stove status: %s", stove_status_col)
     logger.debug("- Setpoint temp: %s", setpoint_temp_col)
     logger.debug("- Average temp: %s", avg_temp_col)
 
-    while i < n:
-        row = df.iloc[i]
-        stove_status = row[stove_status_col]
+    # Convert stove_status to numeric if needed
+    df[stove_status_col] = pd.to_numeric(df[stove_status_col], errors='coerce')
 
-        if stove_status > 0:
-            start_idx = i
-            j = i
-            while j < n:
-                stove_status_j = df.iloc[j][stove_status_col]
-                if stove_status_j <= 0:
-                    break
-                j += 1
+    # Detect episode boundaries
+    status_changes = (df[stove_status_col] > 0) & (df[stove_status_col].shift(1, fill_value=0) <= 0)
+    episode_starts = df.index[status_changes]
 
-            total_episodes_found += 1
-            logger.debug(
-                "Found episode %d from index %d to %d",
-                total_episodes_found,
-                start_idx,
-                j,
-            )
+    if len(episode_starts) == 0:
+        logger.info("No heating episodes found")
+        return pd.DataFrame()
 
-            episode_df = df.iloc[start_idx:j].copy()
-            episode_df[time_since_on_key] = 0.0
+    episodes = []
+    total_episodes = 0
+    episodes_with_comfort = 0
 
-            start_time = episode_df.index[0]
-            for k in range(len(episode_df)):
-                row_time = episode_df.index[k]
-                delta_since_start = (row_time - start_time).total_seconds() / 60.0
-                episode_df.iat[k, episode_df.columns.get_loc(time_since_on_key)] = (
-                    delta_since_start
-                )
+    for start_idx in episode_starts:
+        # Find episode end (when stove turns off or data ends)
+        episode_slice = df.loc[start_idx:]
+        end_mask = episode_slice[stove_status_col] <= 0
 
-            comfort_reached_mask = (
-                episode_df[avg_temp_col] >= episode_df[setpoint_temp_col]
-            )
-            if comfort_reached_mask.any():
-                episodes_reaching_comfort += 1
-                first_reach_idx = comfort_reached_mask.idxmax()
-                t_comfort_reached = episode_df.loc[first_reach_idx].name
-                logger.debug(
-                    "Episode %d reached comfort at %s",
-                    total_episodes_found,
-                    t_comfort_reached,
-                )
-
-                episode_df["Y"] = np.nan
-                for k in range(len(episode_df)):
-                    row_time = episode_df.index[k]
-                    delta = (t_comfort_reached - row_time).total_seconds() / 60.0
-                    if delta < 0:
-                        episode_df.iat[k, episode_df.columns.get_loc("Y")] = np.nan
-                    else:
-                        episode_df.iat[k, episode_df.columns.get_loc("Y")] = delta
-
-                episodes.append(episode_df)
-            else:
-                logger.debug(
-                    "Episode %d did not reach comfort temperature", total_episodes_found
-                )
-
-            i = j
+        if end_mask.any():
+            end_idx = end_mask.idxmax()
         else:
-            i += 1
+            end_idx = episode_slice.index[-1]
+
+        episode_df = df.loc[start_idx:end_idx].copy()
+        total_episodes += 1
+
+        # Calculate time since episode start (vectorized)
+        episode_df[time_since_on_key] = (
+            (episode_df.index - episode_df.index[0]).total_seconds() / 60.0
+        )
+
+        # Check if comfort temperature was reached
+        comfort_reached_mask = episode_df[avg_temp_col] >= episode_df[setpoint_temp_col]
+
+        # Find the first row in which comfort is reached
+        comfort_indices = comfort_reached_mask[comfort_reached_mask].index
+        if len(comfort_indices) > 0:
+            episodes_with_comfort += 1
+            comfort_time = comfort_indices[0]
+
+            logger.debug(
+                "Episode %d reached comfort at %s",
+                total_episodes,
+                comfort_time,
+            )
+
+            # Calculate Y values vectorized (only for times before comfort)
+            valid_mask = episode_df.index <= comfort_time
+            episode_df["Y"] = np.nan
+            episode_df.loc[valid_mask, "Y"] = (
+                (comfort_time - episode_df.index[valid_mask]).total_seconds() / 60.0
+            )
+
+            # Drop last row if the stove is off
+            if not episode_df.empty and episode_df.iloc[-1][stove_status_col] == 0:
+                episode_df.drop(episode_df.tail(1).index, inplace=True)
+
+            episodes.append(episode_df)
+        else:
+            logger.debug(
+                "Episode %d did not reach comfort temperature", total_episodes
+            )
 
     if episodes:
         final_df = pd.concat(episodes)
         logger.info(
             "Found %d total episodes, %d reached comfort temperature",
-            total_episodes_found,
-            episodes_reaching_comfort,
+            total_episodes,
+            episodes_with_comfort,
         )
         logger.debug("Combined episodes shape: %s", final_df.shape)
     else:
         final_df = pd.DataFrame()
         logger.info(
             "Found %d total episodes, but none reached comfort temperature",
-            total_episodes_found,
+            total_episodes,
         )
 
     return final_df
