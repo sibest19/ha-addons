@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import joblib
+from pydantic import BaseModel, Field
 import keras
 
 from constants import (
@@ -96,28 +97,17 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
     return model, history
 
 
-class PredictInput:
+class PredictInput(BaseModel):
     """Data Transfer Object for prediction input parameters."""
 
-    def __init__(
-        self,
-        setpoint_temperature: float,
-        avg_temperature: float,
-        living_room_humidity: float,
-        living_room_temperature: float,
-        outdoor_temperature: float,
-        stove_set_power: float,
-        stove_actual_power: float,
-        time_since_on: float,
-    ):
-        self.setpoint_temperature = setpoint_temperature
-        self.avg_temperature = avg_temperature
-        self.living_room_humidity = living_room_humidity
-        self.living_room_temperature = living_room_temperature
-        self.outdoor_temperature = outdoor_temperature
-        self.stove_set_power = stove_set_power
-        self.stove_actual_power = stove_actual_power
-        self.time_since_on = time_since_on
+    setpoint_temperature: float = Field(..., gt=-50, lt=100)
+    avg_temperature: float = Field(..., gt=-50, lt=100)
+    living_room_humidity: float = Field(..., ge=0, le=100)
+    living_room_temperature: float = Field(..., gt=-50, lt=100)
+    outdoor_temperature: float = Field(..., gt=-100, lt=100)
+    stove_set_power: float = Field(..., ge=0, le=5)
+    stove_actual_power: float = Field(..., ge=0, le=5)
+    time_since_on: float = Field(..., ge=0)
 
 
 def predict(input_params: PredictInput) -> float:

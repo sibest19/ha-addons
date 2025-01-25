@@ -7,7 +7,7 @@ dependencies = [
     "influxdb-client>=1.48.0",
     "numpy<2.1.0",
     "pandas>=2.2.3",
-    "pydantic>=2.6.3",
+    "pydantic>=2.10.6",
     "scikit-learn>=1.6.0",
     "tensorflow>=2.18.0",
     "uvicorn>=0.27.1",

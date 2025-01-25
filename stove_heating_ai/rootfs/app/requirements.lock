@@ -85,7 +85,7 @@ pandas==2.2.3
 protobuf==5.29.2
     # via tensorboard
     # via tensorflow
-pydantic==2.10.5
+pydantic==2.10.6
     # via fastapi
 pydantic-core==2.27.2
     # via pydantic
