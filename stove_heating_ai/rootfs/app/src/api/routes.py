@@ -4,13 +4,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import logging
 import os
-import requests
 
 from core.config import AppConfig
 from ml.data import query_influx_data, extract_heating_episodes
-from ml.model import train_model, predict, PredictInput
-from constants import FluxQueryKeys, HomeAssistantSensor
-from core.env import get_homeassistant_auth_token
+from ml.model import train_model, predict, PredictInput, _model_lock
+from constants import FluxQueryKeys
+
 
 logger = logging.getLogger(__name__)
 
@@ -105,9 +104,8 @@ async def start_training(background_tasks: BackgroundTasks) -> TrainingResponse:
                 logger.error("2. No episodes reached the comfort temperature")
                 logger.error("3. Data is not in expected format")
 
-            train_model(df)
-
-            import datetime
+            with _model_lock:
+                train_model(df)
 
         except Exception as e:
             logger.exception("Training failed")

@@ -32,7 +32,7 @@ _model = None
 _scaler = None
 
 # Create a global lock
-_model_load_lock = Lock()
+_model_lock = Lock()
 
 
 def create_model(input_shape: int) -> keras.Sequential:
@@ -119,8 +119,9 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
     logger.info("Model evaluation on test set - MAE: %.4f, MSE: %.4f", mae, mse)
 
     # Save both model and scaler
-    model.save(model_save_path)
-    joblib.dump(scaler, scaler_save_path)
+    with _model_lock:
+        model.save(model_save_path)
+        joblib.dump(scaler, scaler_save_path)
 
     logger.info("Model saved to %s and scaler to %s", model_save_path, scaler_save_path)
 
@@ -152,7 +153,7 @@ def predict(input_params: PredictInput) -> float:
     global _model, _scaler
 
     try:
-        with _model_load_lock:
+        with _model_lock:
             if _model is None or _scaler is None:
                 _model = keras.models.load_model(model_save_path)
                 _scaler = joblib.load(scaler_save_path)
