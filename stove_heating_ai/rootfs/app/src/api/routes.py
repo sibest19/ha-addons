@@ -4,10 +4,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import logging
 import os
+from concurrent.futures import ProcessPoolExecutor
+import asyncio
+import tensorflow as tf
 
 from core.config import AppConfig
 from ml.data import query_influx_data, extract_heating_episodes
-from ml.model import train_model, predict, PredictInput, _model_lock
+from ml.model import train_model, predict, PredictInput
 from constants import FluxQueryKeys
 
 
@@ -51,6 +54,32 @@ class PredictionResponse(BaseModel):
     message: str
 
 
+def init_worker():
+    """Initialize TensorFlow configuration for worker processes."""
+    import tensorflow as tf
+    tf.config.set_visible_devices([], 'GPU')  # Disable GPU
+    physical_devices = tf.config.list_physical_devices('CPU')
+    if physical_devices:
+        tf.config.set_visible_devices(physical_devices, 'CPU')
+        tf.config.threading.set_intra_op_parallelism_threads(1)
+        tf.config.threading.set_inter_op_parallelism_threads(1)
+
+# Update the process pool creation
+def create_process_pool():
+    return ProcessPoolExecutor(
+        max_workers=1,  # Limit to single worker for TensorFlow stability
+        initializer=init_worker
+    )
+
+# Replace the global process_pool with:
+process_pool = create_process_pool()
+
+@router.on_event("shutdown")
+async def shutdown_event():
+    """Ensure proper cleanup of process pool on shutdown."""
+    process_pool.shutdown(wait=True)
+
+
 @router.get("/")
 async def root(request: Request):
     """Serve the main HTML interface."""
@@ -70,7 +99,12 @@ async def start_training(background_tasks: BackgroundTasks) -> TrainingResponse:
             training_status.last_error = None
 
             config = AppConfig.load()
-            df = await query_influx_data(config)
+            # Use shorter timeout for data query
+            df = await asyncio.wait_for(query_influx_data(config), timeout=300)
+
+            if df.empty:
+                raise ValueError("No data available for training")
+
             logger.info("Processed data shape: %s", df.shape)
             logger.debug("Data columns: %s", df.columns.tolist())
 
@@ -103,10 +137,22 @@ async def start_training(background_tasks: BackgroundTasks) -> TrainingResponse:
                 )
                 logger.error("2. No episodes reached the comfort temperature")
                 logger.error("3. Data is not in expected format")
+            else:
+                # Run training in a separate process with explicit loop
+                loop = asyncio.get_event_loop()
+                # Increase timeout to 1 hour for larger datasets
+                await asyncio.wait_for(
+                    loop.run_in_executor(
+                        process_pool,
+                        train_model,
+                        df
+                    ),
+                    timeout=3600
+                )
 
-            with _model_lock:
-                train_model(df)
-
+        except asyncio.TimeoutError:
+            logger.error("Training timed out")
+            training_status.last_error = "Training timed out"
         except Exception as e:
             logger.exception("Training failed")
             training_status.last_error = str(e)
@@ -160,8 +206,3 @@ async def get_prediction(request: PredictionRequest) -> PredictionResponse:
             status="error",
             message=f"Prediction failed: {str(e)}",
         )
-
-
-class UpdateSensorResult(BaseModel):
-    status: str
-    message: str

@@ -7,6 +7,7 @@ import joblib
 from pydantic import BaseModel, Field
 import keras
 from threading import Lock
+import tensorflow as tf
 
 from constants import (
     model_save_path,
@@ -37,95 +38,118 @@ _model_lock = Lock()
 
 def create_model(input_shape: int) -> keras.Sequential:
     """Create and return the neural network model."""
-    return keras.Sequential(
-        [
-            keras.layers.InputLayer(shape=(input_shape,)),
-            keras.layers.Dense(64, activation="elu"),
-            keras.layers.Dense(128, activation="relu"),
-            keras.layers.Dense(64, activation="relu"),
-            keras.layers.Dense(1),
-        ]
-    )
+    # Ensure we're using the CPU strategy
+    with tf.device('/CPU:0'):
+        return keras.Sequential(
+            [
+                keras.layers.InputLayer(shape=(input_shape,)),
+                keras.layers.Dense(64, activation="elu"),
+                keras.layers.Dense(128, activation="relu"),
+                keras.layers.Dense(64, activation="relu"),
+                keras.layers.Dense(1),
+            ]
+        )
 
 
 def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
     """Train the model on provided data."""
-    if df.empty:
-        logger.warning("No data available for training")
-        return None, None
 
-    feature_columns = FEATURE_COLUMNS
+    with _model_lock:
+        if df.empty:
+            logger.warning("No data available for training")
+            return None, None
 
-    missing_columns = set(FEATURE_COLUMNS) - set(df.columns)
-    if missing_columns:
-        logger.error("Missing required columns: %s", missing_columns)
-        return None, None
+        feature_columns = FEATURE_COLUMNS
 
-    X = df[feature_columns]
-    y = df["Y"]
+        missing_columns = set(FEATURE_COLUMNS) - set(df.columns)
+        if missing_columns:
+            logger.error("Missing required columns: %s", missing_columns)
+            return None, None
 
-    from sklearn.model_selection import KFold
+        X = df[feature_columns]
+        y = df["Y"]
 
-    kfold = KFold(n_splits=5, shuffle=True, random_state=4765)
-
-    best_model = None
-    best_score = float("inf")
-
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(X_scaled)):
-        X_train, X_val = X_scaled[train_idx], X_scaled[val_idx]
-        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
-
-        model = create_model(X_scaled.shape[1])
-        model.compile(optimizer="adam", loss="mse", metrics=["mae"])
-
-        callbacks = [
-            keras.callbacks.EarlyStopping(
-                monitor="val_loss", patience=10, restore_best_weights=True
-            ),
-            keras.callbacks.ReduceLROnPlateau(
-                monitor="val_loss", factor=0.5, patience=5, min_lr=0.0001
-            ),
-        ]
-
-        history = model.fit(
-            X_train,
-            y_train,
-            validation_data=(X_val, y_val),
-            epochs=100,
-            batch_size=32,
-            callbacks=callbacks,
-            verbose="auto",
+        # Split data into train and test sets
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
         )
 
-        # Evaluate model on validation set
-        val_loss = model.evaluate(X_val, y_val, verbose=0)[0]  # type: ignore
-        logger.info(f"Fold {fold + 1}: MSE = {val_loss:.4f}")
+        from sklearn.model_selection import KFold
 
-        # Keep track of best model
-        if val_loss < best_score:
-            best_score = val_loss
-            best_model = model
+        kfold = KFold(n_splits=5, shuffle=True, random_state=4765)
 
-    if best_model is None:
-        logger.error("Model training failed")
-        return None, None
+        best_model = None
+        best_score = float("inf")
 
-    model = best_model
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
 
-    mse, mae = model.evaluate(X_val, y_val, verbose=0)  # type: ignore
-    logger.info("Model evaluation on test set - MAE: %.4f, MSE: %.4f", mae, mse)
+        val_scores = []
 
-    # Save both model and scaler
-    with _model_lock:
-        model.save(model_save_path)
+        for fold, (train_idx, val_idx) in enumerate(kfold.split(X_train_scaled)):
+            X_train_fold, X_val_fold = (
+                X_train_scaled[train_idx],
+                X_train_scaled[val_idx],
+            )
+            y_train_fold, y_val_fold = y_train.iloc[train_idx], y_train.iloc[val_idx]
+
+            model = create_model(X_train_scaled.shape[1])
+            model.compile(optimizer="adam", loss="mse", metrics=["mae"])
+
+            callbacks = [
+                keras.callbacks.EarlyStopping(
+                    monitor="val_loss", patience=10, restore_best_weights=True
+                ),
+                keras.callbacks.ReduceLROnPlateau(
+                    monitor="val_loss", factor=0.5, patience=5, min_lr=0.0001
+                ),
+            ]
+
+            history = model.fit(
+                X_train_fold,
+                y_train_fold,
+                validation_data=(X_val_fold, y_val_fold),
+                epochs=100,
+                batch_size=32,
+                callbacks=callbacks,
+                verbose=0,  # type: ignore
+            )
+
+            # Evaluate model on validation set
+            val_loss = model.evaluate(X_val_fold, y_val_fold, verbose=0)[0]  # type: ignore
+            val_scores.append(val_loss)
+            logger.info(f"Fold {fold + 1}: MSE = {val_loss:.4f}")
+
+            # Keep track of best model
+            if val_loss < best_score:
+                best_score = val_loss
+                best_model = model
+
+        if best_model is None:
+            logger.error("Model training failed")
+            return None, None
+
+        # Evaluate best model on test set
+        test_loss, test_mae = best_model.evaluate(X_test_scaled, y_test, verbose=0)  # type: ignore
+        logger.info(
+            "Model evaluation on test set - MAE: %.4f, MSE: %.4f", test_mae, test_loss
+        )
+
+        # Save both model and scaler
+        best_model.save(model_save_path)
         joblib.dump(scaler, scaler_save_path)
 
-    logger.info("Model saved to %s and scaler to %s", model_save_path, scaler_save_path)
+        global _model, _scaler
 
-    return model, history
+        _model = best_model
+        _scaler = scaler
+
+        logger.info(
+            "Model saved to %s and scaler to %s", model_save_path, scaler_save_path
+        )
+
+        return best_model, history
 
 
 class PredictInput(BaseModel):
@@ -155,8 +179,10 @@ def predict(input_params: PredictInput) -> float:
     try:
         with _model_lock:
             if _model is None or _scaler is None:
-                _model = keras.models.load_model(model_save_path)
-                _scaler = joblib.load(scaler_save_path)
+                # Ensure model loading happens on CPU
+                with tf.device('/CPU:0'):
+                    _model = keras.models.load_model(model_save_path)
+                    _scaler = joblib.load(scaler_save_path)
 
         if not isinstance(_model, keras.Sequential):
             logger.error("Invalid model")

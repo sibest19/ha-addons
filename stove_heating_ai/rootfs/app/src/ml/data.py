@@ -1,7 +1,5 @@
 import logging
-from typing import Optional, List
 import os
-
 import numpy as np
 import pandas as pd
 from influxdb_client.client.influxdb_client import InfluxDBClient
@@ -98,10 +96,12 @@ def extract_heating_episodes(df: pd.DataFrame) -> pd.DataFrame:
     logger.debug("- Average temp: %s", avg_temp_col)
 
     # Convert stove_status to numeric if needed
-    df[stove_status_col] = pd.to_numeric(df[stove_status_col], errors='coerce')
+    df[stove_status_col] = pd.to_numeric(df[stove_status_col], errors="coerce")
 
     # Detect episode boundaries
-    status_changes = (df[stove_status_col] > 0) & (df[stove_status_col].shift(1, fill_value=0) <= 0)
+    status_changes = (df[stove_status_col] > 0) & (
+        df[stove_status_col].shift(1, fill_value=0) <= 0
+    )
     episode_starts = df.index[status_changes]
 
     if len(episode_starts) == 0:
@@ -127,8 +127,8 @@ def extract_heating_episodes(df: pd.DataFrame) -> pd.DataFrame:
 
         # Calculate time since episode start (vectorized)
         episode_df[time_since_on_key] = (
-            (episode_df.index - episode_df.index[0]).total_seconds() / 60.0
-        )
+            episode_df.index - episode_df.index[0]
+        ).total_seconds() / 60.0
 
         # Check if comfort temperature was reached
         comfort_reached_mask = episode_df[avg_temp_col] >= episode_df[setpoint_temp_col]
@@ -149,8 +149,8 @@ def extract_heating_episodes(df: pd.DataFrame) -> pd.DataFrame:
             valid_mask = episode_df.index <= comfort_time
             episode_df["Y"] = np.nan
             episode_df.loc[valid_mask, "Y"] = (
-                (comfort_time - episode_df.index[valid_mask]).total_seconds() / 60.0
-            )
+                comfort_time - episode_df.index[valid_mask]
+            ).total_seconds() / 60.0
 
             # Drop last row if the stove is off
             if not episode_df.empty and episode_df.iloc[-1][stove_status_col] == 0:
@@ -158,9 +158,7 @@ def extract_heating_episodes(df: pd.DataFrame) -> pd.DataFrame:
 
             episodes.append(episode_df)
         else:
-            logger.debug(
-                "Episode %d did not reach comfort temperature", total_episodes
-            )
+            logger.debug("Episode %d did not reach comfort temperature", total_episodes)
 
     if episodes:
         final_df = pd.concat(episodes)

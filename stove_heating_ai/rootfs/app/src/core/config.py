@@ -1,7 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass, fields
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,6 @@ class AppConfig:
                 return cls(**json_data)
 
         except FileNotFoundError:
-            raise ConfigurationError("Configuration file not found")
+            raise ConfigurationError("Configuration file not found") from None
         except json.JSONDecodeError as e:
-            raise ConfigurationError(f"Invalid JSON format: {e}")
+            raise ConfigurationError(f"Invalid JSON format: {e}") from e
