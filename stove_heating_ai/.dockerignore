@@ -1,6 +1,6 @@
-rootfs/app/requirements-dev.lock
-rootfs/app/pyproject.toml
-rootfs/app/.venv
-rootfs/app/.ruff_cache
+app/requirements-dev.lock
+app/pyproject.toml
+app/.venv
+app/.ruff_cache
 
 **/__pycache__/**/*
