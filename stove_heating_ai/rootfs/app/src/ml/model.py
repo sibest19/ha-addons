@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Any, List
+from typing import Optional, Tuple, Any
 import logging
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -213,7 +213,7 @@ def predict(input_params: PredictInput) -> float:
         features_scaled = _scaler.transform(features)
 
         # Make prediction
-        prediction = _model.predict(features_scaled, verbose="auto")
+        prediction = _model.predict(features_scaled, verbose=0)  # type: ignore
         return float(prediction[0][0])
 
     except Exception as e:

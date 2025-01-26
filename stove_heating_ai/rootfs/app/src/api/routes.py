@@ -6,7 +6,6 @@ import logging
 import os
 from concurrent.futures import ProcessPoolExecutor
 import asyncio
-import tensorflow as tf
 
 from core.config import AppConfig
 from ml.data import query_influx_data, extract_heating_episodes
