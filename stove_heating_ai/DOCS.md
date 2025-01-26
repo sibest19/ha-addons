@@ -14,15 +14,15 @@
 
 ```yaml
 stove_ai_train:
-  url: http://3bd0be80_stove_heating_ai:8099/train
+  url: http://3bd0be80-stove-heating-ai:8099/train
   method: post
 
 stove_ai_status:
-  url: http://3bd0be80_stove_heating_ai:8099/status
+  url: http://3bd0be80-stove-heating-ai:8099/status
   method: get
 
 stove_ai_predict:
-  url: http://3bd0be80_stove_heating_ai:8099/predict
+  url: http://3bd0be80-stove-heating-ai:8099/predict
   method: post
   content_type: "application/json"
   payload: |
