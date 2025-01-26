@@ -9,7 +9,7 @@ app = FastAPI(
     title="Stove Heating AI",
     description="AI service for predicting and optimizing stove heating behavior",
     version="1.0.0",
-    root_path="/api/hassio_ingress/{{ADDON_SLUG}}",  # Required for Home Assistant ingress support
+    root_path="/api/hassio_ingress/{ADDON_SLUG}",
 )
 
 app.add_middleware(

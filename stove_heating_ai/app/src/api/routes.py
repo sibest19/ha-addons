@@ -6,6 +6,7 @@ import logging
 import os
 from concurrent.futures import ProcessPoolExecutor
 import asyncio
+from threading import Lock
 
 from core.config import AppConfig
 from ml.data import query_influx_data, extract_heating_episodes
@@ -24,8 +25,29 @@ router.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 class TrainingStatus:
     def __init__(self):
-        self.is_training = False
-        self.last_error: str | None = None
+        self._lock = Lock()
+        self._is_training = False
+        self._last_error: str | None = None
+
+    @property
+    def is_training(self) -> bool:
+        with self._lock:
+            return self._is_training
+
+    @is_training.setter
+    def is_training(self, value: bool) -> None:
+        with self._lock:
+            self._is_training = value
+
+    @property
+    def last_error(self) -> str | None:
+        with self._lock:
+            return self._last_error
+
+    @last_error.setter
+    def last_error(self, value: str | None) -> None:
+        with self._lock:
+            self._last_error = value
 
 
 training_status = TrainingStatus()
