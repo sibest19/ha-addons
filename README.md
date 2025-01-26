@@ -20,6 +20,16 @@ This repository contains the following add-ons
 
 _Example add-on to use as a blueprint for new add-ons._
 
+### [Stove Heating AI](./stove_heating_ai)
+
+![Supports aarch64 Architecture][aarch64-shield]
+![Supports amd64 Architecture][amd64-shield]
+![Does not support armhf Architecture][no-armhf-shield]
+![Does not support armv7 Architecture][no-armv7-shield]
+![Does not support i386 Architecture][no-i386-shield]
+
+_This add-on is a simple AI that predicts how many minutes are needed to reach comfort temperature._
+
 <!--
 
 Notes to developers after forking or using the github template feature:
@@ -44,3 +54,8 @@ Notes to developers after forking or using the github template feature:
 [armhf-shield]: https://img.shields.io/badge/armhf-yes-green.svg
 [armv7-shield]: https://img.shields.io/badge/armv7-yes-green.svg
 [i386-shield]: https://img.shields.io/badge/i386-yes-green.svg
+[no-aarch64-shield]: https://img.shields.io/badge/aarch64-no-red.svg
+[no-amd64-shield]: https://img.shields.io/badge/amd64-no-red.svg
+[no-armhf-shield]: https://img.shields.io/badge/armhf-no-red.svg
+[no-armv7-shield]: https://img.shields.io/badge/armv7-no-red.svg
+[no-i386-shield]: https://img.shields.io/badge/i386-no-red.svg

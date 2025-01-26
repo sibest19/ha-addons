@@ -1,0 +1,6 @@
+app/requirements-dev.lock
+app/pyproject.toml
+app/.venv
+app/.ruff_cache
+
+**/__pycache__/**/*
