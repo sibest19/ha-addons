@@ -6,6 +6,7 @@
 2. Configure the add-on
 3. Start the add-on
 4. Check the logs of the add-on to see if everything is working correctly
+5. Use the rest commands (see below) or the UI to train the AI and to get predictions
 
 ## Rest commands to use the AI
 
@@ -13,15 +14,15 @@
 
 ```yaml
 stove_ai_train:
-  url: http://local-stove-heating-ai:8099/train
+  url: http://3bd0be80_stove_heating_ai:8099/train
   method: post
 
 stove_ai_status:
-  url: http://local-stove-heating-ai:8099/status
+  url: http://3bd0be80_stove_heating_ai:8099/status
   method: get
 
 stove_ai_predict:
-  url: http://local-stove-heating-ai:8099/predict
+  url: http://3bd0be80_stove_heating_ai:8099/predict
   method: post
   content_type: "application/json"
   payload: |

@@ -1,6 +1,6 @@
-# Home Assistant Add-on: Custom Apps
+# Home Assistant Add-on: Stove Heating AI
 
-_This add-on is to run custom python apps on Home Assistant._
+_AI for stove heating control._
 
 ![Supports aarch64 Architecture][aarch64-shield]
 ![Supports amd64 Architecture][amd64-shield]
