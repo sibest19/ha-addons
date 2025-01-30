@@ -12,4 +12,6 @@ RUN uv pip install --no-cache --system -r ./requirements.lock
 
 COPY app/src ./src
 
+ENV CUDA_VISIBLE_DEVICES=""
+
 CMD [ "python", "src/main.py" ]

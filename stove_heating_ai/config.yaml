@@ -1,5 +1,5 @@
 name: Stove Heating AI
-version: "1.0.1"
+version: "1.1.0"
 slug: stove_heating_ai
 description: AI model for stove heating prediction and control
 url: "https://github.com/sibest19/ha-addons/tree/main/stove_heating_ai"
