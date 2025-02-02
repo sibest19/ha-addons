@@ -1,5 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import logging
@@ -11,7 +11,7 @@ from threading import Lock
 from core.config import AppConfig
 from ml.data import query_influx_data, extract_heating_episodes
 from ml.model import train_model, predict, PredictInput
-from constants import FluxQueryKeys
+from constants import FluxQueryKeys, training_data_path
 
 
 logger = logging.getLogger(__name__)
@@ -240,3 +240,18 @@ async def get_prediction(request: PredictionRequest) -> PredictionResponse:
             status="error",
             message=f"Prediction failed: {str(e)}",
         )
+
+
+@router.get("/training-data", response_class=HTMLResponse)
+async def get_training_data():
+    """Serve the training data visualization."""
+    try:
+        if not os.path.exists(training_data_path):
+            return HTMLResponse(content="No training data available yet")
+
+        with open(training_data_path, "r") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    except Exception as e:
+        logger.error("Failed to serve training data: %s", str(e))
+        return HTMLResponse(content="Error loading training data")

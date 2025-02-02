@@ -14,6 +14,7 @@ from constants import (
     FluxQueryKeys,
     time_since_on_key,
     scaler_save_path,
+    training_data_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,13 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
         logger.info(
             "Model saved to %s and scaler to %s", model_save_path, scaler_save_path
         )
+
+        # Save training data visualization
+        styled_df = df.style.background_gradient()
+        html = styled_df.to_html()
+        with open(training_data_path, "w") as f:
+            f.write(html)
+        logger.info("Training data visualization saved to %s", training_data_path)
 
         return best_model, history
 
