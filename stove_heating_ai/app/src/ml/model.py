@@ -151,11 +151,16 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
         )
 
         # Save training data visualization
-        styled_df = df.style.background_gradient()
-        html = styled_df.to_html()
-        with open(training_data_path, "w") as f:
-            f.write(html)
-        logger.info("Training data visualization saved to %s", training_data_path)
+        try:
+            # Limit to most relevant columns and last 1000 rows for performance
+            display_df = df.tail(1000)
+            styled_df = display_df.style.background_gradient(subset=['Y', 'avg_temperature'])
+            html = styled_df.to_html(escape=True)  # Sanitize HTML content
+            with open(training_data_path, "w", encoding='utf-8') as f:
+                f.write(html)
+            logger.info("Training data visualization saved to %s", training_data_path)
+        except Exception as e:
+            logger.error("Failed to save training data visualization: %s", str(e))
 
         return best_model, history
 
