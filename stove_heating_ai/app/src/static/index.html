@@ -163,6 +163,18 @@
         grid-template-columns: repeat(3, 1fr);
       }
     }
+
+    .data-link {
+      display: block;
+      margin-top: 15px;
+      color: #3b82f6;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .data-link:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 
@@ -174,6 +186,7 @@
       <h2 style="font-size: 1.4rem; margin-bottom: 15px">Training Control</h2>
       <button id="trainButton" onclick="startTraining()">Start Training</button>
       <div id="trainingStatus" class="status idle">Current Status: Idle</div>
+      <a href="./training-data" target="_blank" class="data-link">View Training Data</a>
     </div>
 
     <div class="card">

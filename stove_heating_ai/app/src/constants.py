@@ -18,6 +18,7 @@ time_since_on_key = "time_since_on"
 # "/data" is a persistent volume in the docker container
 model_save_path = "/data/model.keras"
 scaler_save_path = "/data/scaler.pkl"
+training_data_path = "/data/training_data.html"
 
 
 class HomeAssistantSensor(Enum):
