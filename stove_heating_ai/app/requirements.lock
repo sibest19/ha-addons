@@ -45,6 +45,7 @@ idna==3.10
     # via anyio
     # via requests
 influxdb-client==1.48.0
+jinja2==3.1.5
 joblib==1.4.2
     # via scikit-learn
 keras==3.8.0
@@ -56,6 +57,7 @@ markdown==3.7
 markdown-it-py==3.0.0
     # via rich
 markupsafe==3.0.2
+    # via jinja2
     # via werkzeug
 mdurl==0.1.2
     # via markdown-it-py

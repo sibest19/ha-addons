@@ -12,13 +12,11 @@ dependencies = [
     "tensorflow>=2.18.0",
     "uvicorn>=0.27.1",
     "requests>=2.32.3",
+    "jinja2>=3.1.5",
 ]
 requires-python = ">= 3.8"
 
 [tool.rye]
 managed = true
 virtual = true
-dev-dependencies = [
-    "pytest>=8.3.4",
-    "pytest-asyncio>=0.25.2",
-]
+dev-dependencies = ["pytest>=8.3.4", "pytest-asyncio>=0.25.2"]
