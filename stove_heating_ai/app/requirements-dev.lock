@@ -26,9 +26,15 @@ charset-normalizer==3.4.1
     # via requests
 click==8.1.8
     # via uvicorn
+contourpy==1.3.1
+    # via matplotlib
+cycler==0.12.1
+    # via matplotlib
 fastapi==0.115.6
 flatbuffers==24.12.23
     # via tensorflow
+fonttools==4.56.0
+    # via matplotlib
 gast==0.6.0
     # via tensorflow
 google-pasta==0.2.0
@@ -52,6 +58,8 @@ joblib==1.4.2
     # via scikit-learn
 keras==3.8.0
     # via tensorflow
+kiwisolver==1.4.8
+    # via matplotlib
 libclang==18.1.1
     # via tensorflow
 markdown==3.7
@@ -61,6 +69,7 @@ markdown-it-py==3.0.0
 markupsafe==3.0.2
     # via jinja2
     # via werkzeug
+matplotlib==3.10.0
 mdurl==0.1.2
     # via markdown-it-py
 ml-dtypes==0.4.1
@@ -69,8 +78,10 @@ ml-dtypes==0.4.1
 namex==0.0.8
     # via keras
 numpy==2.0.2
+    # via contourpy
     # via h5py
     # via keras
+    # via matplotlib
     # via ml-dtypes
     # via pandas
     # via scikit-learn
@@ -83,10 +94,13 @@ optree==0.13.1
     # via keras
 packaging==24.2
     # via keras
+    # via matplotlib
     # via pytest
     # via tensorboard
     # via tensorflow
 pandas==2.2.3
+pillow==11.1.0
+    # via matplotlib
 pluggy==1.5.0
     # via pytest
 protobuf==5.29.2
@@ -98,11 +112,14 @@ pydantic-core==2.27.2
     # via pydantic
 pygments==2.19.1
     # via rich
+pyparsing==3.2.1
+    # via matplotlib
 pytest==8.3.4
     # via pytest-asyncio
 pytest-asyncio==0.25.2
 python-dateutil==2.9.0.post0
     # via influxdb-client
+    # via matplotlib
     # via pandas
 pytz==2024.2
     # via pandas
