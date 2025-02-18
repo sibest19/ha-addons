@@ -38,8 +38,6 @@ _model_lock = Lock()
 
 
 def create_model(input_shape: int) -> keras.Sequential:
-    """Create and return the neural network model."""
-    # Ensure we're using the CPU strategy
     with tf.device("/CPU:0"):
         return keras.Sequential(
             [
@@ -50,6 +48,130 @@ def create_model(input_shape: int) -> keras.Sequential:
                 keras.layers.Dense(1),
             ]
         )
+
+
+def create_model_variation(input_shape: int, architecture: str) -> keras.Sequential:
+    """Create and return different neural network model architectures."""
+
+    with tf.device("/CPU:0"):
+        if architecture == "simple":
+            return keras.Sequential(
+                [
+                    keras.layers.InputLayer(shape=(input_shape,)),
+                    keras.layers.Dense(32, activation="relu"),
+                    keras.layers.Dense(32, activation="relu"),
+                    keras.layers.Dense(1),
+                ]
+            )
+        elif architecture == "deep":
+            return keras.Sequential(
+                [
+                    keras.layers.InputLayer(shape=(input_shape,)),
+                    keras.layers.Dense(64, activation="relu"),
+                    keras.layers.Dense(128, activation="relu"),
+                    keras.layers.Dense(128, activation="relu"),
+                    keras.layers.Dense(64, activation="relu"),
+                    keras.layers.Dense(1),
+                ]
+            )
+        elif architecture == "elu":
+            return keras.Sequential(
+                [
+                    keras.layers.InputLayer(shape=(input_shape,)),
+                    keras.layers.Dense(64, activation="elu"),
+                    keras.layers.Dense(128, activation="elu"),
+                    keras.layers.Dense(64, activation="elu"),
+                    keras.layers.Dense(1),
+                ]
+            )
+        elif architecture == "wide":
+            return keras.Sequential(
+                [
+                    keras.layers.InputLayer(shape=(input_shape,)),
+                    keras.layers.Dense(256, activation="relu"),
+                    keras.layers.Dense(256, activation="relu"),
+                    keras.layers.Dense(1),
+                ]
+            )
+        elif architecture == "residual":
+            # Residual connections can help with gradient flow
+            inputs = keras.layers.Input(shape=(input_shape,))
+            x = keras.layers.Dense(64, activation="relu")(inputs)
+            residual = x
+            x = keras.layers.Dense(64, activation="relu")(x)
+            x = keras.layers.Add()([x, residual])
+            x = keras.layers.Dense(32, activation="relu")(x)
+            outputs = keras.layers.Dense(1)(x)
+            return keras.Model(inputs=inputs, outputs=outputs)
+        elif architecture == "regularized":
+            # L1L2 regularization to prevent overfitting
+            return keras.Sequential(
+                [
+                    keras.layers.InputLayer(shape=(input_shape,)),
+                    keras.layers.Dense(
+                        64,
+                        activation="relu",
+                        kernel_regularizer=keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+                    ),
+                    keras.layers.Dropout(0.2),
+                    keras.layers.Dense(
+                        128,
+                        activation="relu",
+                        kernel_regularizer=keras.regularizers.l1_l2(l1=1e-5, l2=1e-4),
+                    ),
+                    keras.layers.Dropout(0.2),
+                    keras.layers.Dense(1),
+                ]
+            )
+        elif architecture == "selu":
+            # Self-normalizing neural network
+            return keras.Sequential(
+                [
+                    keras.layers.InputLayer(shape=(input_shape,)),
+                    keras.layers.Dense(
+                        64, activation="selu", kernel_initializer="lecun_normal"
+                    ),
+                    keras.layers.Dense(
+                        128, activation="selu", kernel_initializer="lecun_normal"
+                    ),
+                    keras.layers.Dense(
+                        64, activation="selu", kernel_initializer="lecun_normal"
+                    ),
+                    keras.layers.Dense(1),
+                ]
+            )
+        elif architecture == "deep_dropout":
+            # Deeper network with aggressive dropout
+            return keras.Sequential(
+                [
+                    keras.layers.InputLayer(shape=(input_shape,)),
+                    keras.layers.Dense(128, activation="relu"),
+                    keras.layers.Dropout(0.3),
+                    keras.layers.Dense(256, activation="relu"),
+                    keras.layers.Dropout(0.3),
+                    keras.layers.Dense(256, activation="relu"),
+                    keras.layers.Dropout(0.3),
+                    keras.layers.Dense(128, activation="relu"),
+                    keras.layers.Dropout(0.3),
+                    keras.layers.Dense(1),
+                ]
+            )
+        elif architecture == "leaky":
+            # Using LeakyReLU for potential better gradient flow
+            return keras.Sequential(
+                [
+                    keras.layers.InputLayer(shape=(input_shape,)),
+                    keras.layers.Dense(64),
+                    keras.layers.LeakyReLU(alpha=0.1),
+                    keras.layers.Dense(128),
+                    keras.layers.LeakyReLU(alpha=0.1),
+                    keras.layers.Dense(64),
+                    keras.layers.LeakyReLU(alpha=0.1),
+                    keras.layers.Dense(1),
+                ]
+            )
+        else:  # default to original
+            return create_model(input_shape)
 
 
 def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
@@ -79,53 +201,80 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
 
         kfold = KFold(n_splits=5, shuffle=True, random_state=4765)
 
-        best_model = None
-        best_score = float("inf")
-
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        val_scores = []
+        architectures = [
+            "original",
+            "simple",
+            "deep",
+            "elu",
+            "wide",
+            "residual",
+            "regularized",
+            "selu",
+            "deep_dropout",
+            "leaky",
+        ]
+        architecture_scores = {}
+        best_model = None
+        best_score = float("inf")
+        best_architecture = None
 
-        for fold, (train_idx, val_idx) in enumerate(kfold.split(X_train_scaled)):
-            X_train_fold, X_val_fold = (
-                X_train_scaled[train_idx],
-                X_train_scaled[val_idx],
-            )
-            y_train_fold, y_val_fold = y_train.iloc[train_idx], y_train.iloc[val_idx]
+        for architecture in architectures:
+            logger.info(f"Training architecture: {architecture}")
+            val_scores = []
 
-            model = create_model(X_train_scaled.shape[1])
-            model.compile(optimizer="adam", loss="mse", metrics=["mae"])
+            for fold, (train_idx, val_idx) in enumerate(kfold.split(X_train_scaled)):
+                X_train_fold, X_val_fold = (
+                    X_train_scaled[train_idx],
+                    X_train_scaled[val_idx],
+                )
+                y_train_fold, y_val_fold = (
+                    y_train.iloc[train_idx],
+                    y_train.iloc[val_idx],
+                )
 
-            callbacks = [
-                keras.callbacks.EarlyStopping(
-                    monitor="val_loss", patience=10, restore_best_weights=True
-                ),
-                keras.callbacks.ReduceLROnPlateau(
-                    monitor="val_loss", factor=0.5, patience=5, min_lr=0.0001
-                ),
-            ]
+                model = create_model_variation(X_train_scaled.shape[1], architecture)
+                model.compile(optimizer="adam", loss="mse", metrics=["mae"])
 
-            history = model.fit(
-                X_train_fold,
-                y_train_fold,
-                validation_data=(X_val_fold, y_val_fold),
-                epochs=100,
-                batch_size=32,
-                callbacks=callbacks,
-                verbose=0,  # type: ignore
-            )
+                callbacks = [
+                    keras.callbacks.EarlyStopping(
+                        monitor="val_loss", patience=10, restore_best_weights=True
+                    ),
+                    keras.callbacks.ReduceLROnPlateau(
+                        monitor="val_loss", factor=0.5, patience=5, min_lr=0.0001
+                    ),
+                ]
 
-            # Evaluate model on validation set
-            val_loss = model.evaluate(X_val_fold, y_val_fold, verbose=0)[0]  # type: ignore
-            val_scores.append(val_loss)
-            logger.info(f"Fold {fold + 1}: MSE = {val_loss:.4f}")
+                history = model.fit(
+                    X_train_fold,
+                    y_train_fold,
+                    validation_data=(X_val_fold, y_val_fold),
+                    epochs=100,
+                    batch_size=32,
+                    callbacks=callbacks,
+                    verbose=0,  # type: ignore
+                )
 
-            # Keep track of best model
-            if val_loss < best_score:
-                best_score = val_loss
+                val_loss = model.evaluate(X_val_fold, y_val_fold, verbose=0)[0]
+                val_scores.append(val_loss)
+                logger.info(f"{architecture} - Fold {fold + 1}: MSE = {val_loss:.4f}")
+
+            avg_score = sum(val_scores) / len(val_scores)
+            architecture_scores[architecture] = avg_score
+            logger.info(f"{architecture} - Average MSE: {avg_score:.4f}")
+
+            if avg_score < best_score:
+                best_score = avg_score
                 best_model = model
+                best_architecture = architecture
+
+        logger.info("Architecture comparison:")
+        for arch, score in sorted(architecture_scores.items(), key=lambda x: x[1]):
+            logger.info(f"{arch:10} - MSE: {score:.4f}")
+        logger.info(f"Best architecture: {best_architecture} (MSE: {best_score:.4f})")
 
         if best_model is None:
             logger.error("Model training failed")
@@ -152,11 +301,9 @@ def train_model(df: pd.DataFrame) -> Tuple[Optional[keras.Sequential], Any]:
 
         # Save training data visualization
         try:
-            # Limit to most relevant columns and last 1000 rows for performance
-            display_df = df.tail(1000)
-            styled_df = display_df.style.background_gradient(subset=['Y', 'avg_temperature'])
+            styled_df = df.style.background_gradient(subset=["Y", "avg_temperature"])
             html = styled_df.to_html(escape=True)  # Sanitize HTML content
-            with open(training_data_path, "w", encoding='utf-8') as f:
+            with open(training_data_path, "w", encoding="utf-8") as f:
                 f.write(html)
             logger.info("Training data visualization saved to %s", training_data_path)
         except Exception as e:
